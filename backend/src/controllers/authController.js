@@ -1,92 +1,161 @@
-import supabase from "../config/supabase.js";
+import jwt from 'jsonwebtoken';
+import supabase from '../config/supabase.js';
+
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const passwordMinLength = 6;
+const jwtSecret = process.env.JWT_SECRET || 'dev-jwt-secret-change-me';
+
+const signToken = ({ id, email, tenantId }) =>
+  jwt.sign({ id, email, tenantId }, jwtSecret, {
+    expiresIn: '7d',
+  });
+
+const validateAuthInput = (email, password) => {
+  if (!email || !password) {
+    return 'Email and password are required';
+  }
+
+  if (!emailRegex.test(email)) {
+    return 'Please enter a valid email address';
+  }
+
+  if (password.length < passwordMinLength) {
+    return `Password must be at least ${passwordMinLength} characters`;
+  }
+
+  return null;
+};
+
+const ensureTenantAndProfile = async (user) => {
+  const { data: existingProfile, error: profileLookupError } = await supabase
+    .from('profiles')
+    .select('id, email, tenant_id')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (profileLookupError) {
+    throw new Error(`Failed to fetch profile: ${profileLookupError.message}`);
+  }
+
+  if (existingProfile?.tenant_id) {
+    return {
+      profile: existingProfile,
+      tenantId: existingProfile.tenant_id,
+      created: false,
+    };
+  }
+
+  const { data: tenant, error: tenantError } = await supabase
+    .from('tenants')
+    .insert([{ name: `${user.email}'s workspace` }])
+    .select('id, name')
+    .single();
+
+  if (tenantError) {
+    throw new Error(`Failed to create workspace: ${tenantError.message}`);
+  }
+
+  if (existingProfile) {
+    const { data: updatedProfile, error: updateError } = await supabase
+      .from('profiles')
+      .update({
+        email: user.email,
+        tenant_id: tenant.id,
+      })
+      .eq('id', user.id)
+      .select('id, email, tenant_id')
+      .single();
+
+    if (updateError) {
+      throw new Error(`Failed to update profile: ${updateError.message}`);
+    }
+
+    return {
+      profile: updatedProfile,
+      tenantId: tenant.id,
+      created: true,
+    };
+  }
+
+  const { data: profile, error: profileInsertError } = await supabase
+    .from('profiles')
+    .insert([
+      {
+        id: user.id,
+        email: user.email,
+        tenant_id: tenant.id,
+      },
+    ])
+    .select('id, email, tenant_id')
+    .single();
+
+  if (profileInsertError) {
+    throw new Error(`Failed to create profile: ${profileInsertError.message}`);
+  }
+
+  return {
+    profile,
+    tenantId: tenant.id,
+    created: true,
+  };
+};
 
 export const signup = async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password } = req.body ?? {};
+  console.log('Signup request:', { email });
 
-  // Validate inputs
-  if (!email || !password) {
+  const validationError = validateAuthInput(email, password);
+  if (validationError) {
     return res.status(400).json({
       success: false,
-      error: 'Email and password are required',
+      error: validationError,
     });
   }
 
-  console.log('SIGNUP ATTEMPT:', { email });
-
   try {
-    // Step 1: Create auth user
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
     });
 
     if (error) {
-      console.error('AUTH SIGNUP ERROR:', error.message);
-      return res.status(400).json({
+      const statusCode = /already registered|already exists/i.test(error.message) ? 409 : 400;
+      return res.status(statusCode).json({
         success: false,
         error: error.message,
       });
     }
 
-    const user = data.user;
-    console.log('AUTH USER CREATED:', { userId: user.id });
-
-    // Step 2: Create tenant
-    const { data: tenantData, error: tenantError } = await supabase
-      .from("tenants")
-      .insert([{ name: `${email}'s workspace` }])
-      .select()
-      .single();
-
-    if (tenantError) {
-      console.error('TENANT CREATION ERROR:', tenantError.message);
+    if (!data?.user) {
       return res.status(500).json({
         success: false,
-        error: `Failed to create workspace: ${tenantError.message}`,
+        error: 'Signup did not return a user',
       });
     }
 
-    console.log('TENANT CREATED:', { tenantId: tenantData.id });
+    const { profile, tenantId } = await ensureTenantAndProfile(data.user);
+    const token = signToken({ id: data.user.id, email: data.user.email, tenantId });
 
-    // Step 3: Create user profile linked to tenant
-    const { data: profileData, error: profileError } = await supabase
-      .from("profiles")
-      .insert([
-        {
-          id: user.id,
-          email: user.email,
-          tenant_id: tenantData.id,
-        },
-      ])
-      .select()
-      .single();
-
-    if (profileError) {
-      console.error('PROFILE CREATION ERROR:', profileError.message);
-      return res.status(500).json({
-        success: false,
-        error: `Failed to create profile: ${profileError.message}. Note: Check that RLS is disabled on profiles table.`,
-      });
-    }
-
-    console.log('PROFILE CREATED:', { userId: user.id, tenantId: tenantData.id });
-    console.log('SIGNUP SUCCESS');
-
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
-      message: "Account created successfully",
       data: {
         user: {
-          id: user.id,
-          email: user.email,
+          id: data.user.id,
+          email: data.user.email,
+          tenantId,
         },
-        session: data.session,
-        tenant: tenantData,
+        profile,
       },
+      user: {
+        id: data.user.id,
+        email: data.user.email,
+        tenantId,
+      },
+      token,
     });
   } catch (err) {
-    console.error('SIGNUP EXCEPTION:', err.message);
-    res.status(500).json({
+    console.error('Signup error:', err);
+    return res.status(500).json({
       success: false,
       error: 'An error occurred during signup',
     });
@@ -94,17 +163,16 @@ export const signup = async (req, res) => {
 };
 
 export const login = async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password } = req.body ?? {};
+  console.log('Login request:', { email });
 
-  // Validate inputs
-  if (!email || !password) {
+  const validationError = validateAuthInput(email, password);
+  if (validationError) {
     return res.status(400).json({
       success: false,
-      error: 'Email and password are required',
+      error: validationError,
     });
   }
-
-  console.log('LOGIN ATTEMPT:', { email });
 
   try {
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -113,93 +181,42 @@ export const login = async (req, res) => {
     });
 
     if (error) {
-      console.error('SUPABASE AUTH ERROR:', error.message);
       return res.status(401).json({
         success: false,
-        error: error.message,
+        error: 'Invalid email or password',
       });
     }
 
-    // Verify we have a session with access token
-    if (!data?.session?.access_token) {
-      console.error('NO ACCESS TOKEN IN RESPONSE');
+    if (!data?.user) {
       return res.status(401).json({
         success: false,
-        error: 'Failed to obtain access token',
+        error: 'Unable to authenticate user',
       });
     }
 
-    const user = data.user;
-    console.log('LOGIN SUCCESS:', { userId: user.id });
+    const { profile, tenantId } = await ensureTenantAndProfile(data.user);
+    const token = signToken({ id: data.user.id, email: data.user.email, tenantId });
 
-    // ===== AUTO-CREATE PROFILE & TENANT IF MISSING =====
-    console.log('CHECKING PROFILE:', { userId: user.id });
-
-    const { data: profile, error: profileCheckError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
-
-    if (profileCheckError || !profile) {
-      console.log('PROFILE NOT FOUND - CREATING TENANT & PROFILE');
-
-      // Create tenant
-      const { data: tenant, error: tenantError } = await supabase
-        .from('tenants')
-        .insert([
-          {
-            name: `${user.email}'s workspace`,
-          },
-        ])
-        .select()
-        .single();
-
-      if (tenantError) {
-        console.error('AUTO-TENANT CREATION ERROR:', tenantError.message);
-        return res.status(500).json({
-          success: false,
-          error: `Failed to create workspace: ${tenantError.message}`,
-        });
-      }
-
-      console.log('AUTO-TENANT CREATED:', { tenantId: tenant.id });
-
-      // Create profile
-      const { error: profileInsertError } = await supabase
-        .from('profiles')
-        .insert([
-          {
-            id: user.id,
-            email: user.email,
-            tenant_id: tenant.id,
-          },
-        ]);
-
-      if (profileInsertError) {
-        console.error('AUTO-PROFILE CREATION ERROR:', profileInsertError.message);
-        return res.status(500).json({
-          success: false,
-          error: `Failed to create profile: ${profileInsertError.message}`,
-        });
-      }
-
-      console.log('AUTO-PROFILE CREATED:', { userId: user.id, tenantId: tenant.id });
-    } else {
-      console.log('PROFILE ALREADY EXISTS:', { userId: user.id });
-    }
-    // ===== END AUTO-CREATE =====
-
-    res.json({
+    return res.status(200).json({
       success: true,
       data: {
-        session: data.session,
-        user: data.user,
+        user: {
+          id: data.user.id,
+          email: data.user.email,
+          tenantId,
+        },
+        profile,
       },
+      user: {
+        id: data.user.id,
+        email: data.user.email,
+        tenantId,
+      },
+      token,
     });
   } catch (err) {
-    console.error('LOGIN ERROR:', err.message);
-    res.status(500).json({
+    console.error('Login error:', err);
+    return res.status(500).json({
       success: false,
       error: 'An error occurred during login',
     });

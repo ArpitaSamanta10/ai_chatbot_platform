@@ -9,6 +9,7 @@ function App() {
 
   // Auth state
   const [token, setToken] = useState(localStorage.getItem('token') || '');
+  const [user, setUser] = useState(null);
   const [email, setEmail] = useState(''); // Would come from auth system normally
 
   // Sidebar state
@@ -293,9 +294,65 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     setToken('');
+    setUser(null);
     setMessages([]);
     setConversationId(null);
     setEmail('');
+  };
+
+  const handleLogin = async (email, password) => {
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+      const res = await fetch(`${backendUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+
+      if (data.success && data.token) {
+        localStorage.setItem('token', data.token);
+        setToken(data.token);
+        setUser(data.user || { email });
+        setEmail(email);
+        setError(null);
+      } else {
+        setError(data.error || 'Login failed');
+      }
+    } catch (err) {
+      setError('Login error: ' + err.message);
+      console.error('Login error:', err);
+    }
+  };
+
+  const handleSignup = async (email, password) => {
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+      const res = await fetch(`${backendUrl}/api/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+
+      if (data.success && data.token) {
+        localStorage.setItem('token', data.token);
+        setToken(data.token);
+        setUser(data.user || { email });
+        setEmail(email);
+        setError(null);
+      } else if (data.success) {
+        setError(null);
+        await handleLogin(email, password);
+      } else {
+        setError(data.error || 'Signup failed');
+      }
+    } catch (err) {
+      setError('Signup error: ' + err.message);
+      console.error('Signup error:', err);
+    }
   };
 
   const handleQuickSend = (text, autoSubmit = false) => {
@@ -374,6 +431,92 @@ function App() {
 
     setLoading(false);
   };
+
+  // AuthPage Component
+  const AuthPage = () => {
+    const [authEmail, setAuthEmail] = useState('');
+    const [authPassword, setAuthPassword] = useState('');
+    const [isSignup, setIsSignup] = useState(false);
+    const [authError, setAuthError] = useState('');
+
+    const handleAuthSubmit = async (e) => {
+      e.preventDefault();
+      setAuthError('');
+
+      if (!authEmail || !authPassword) {
+        setAuthError('Please enter email and password');
+        return;
+      }
+
+      if (isSignup) {
+        await handleSignup(authEmail, authPassword);
+      } else {
+        await handleLogin(authEmail, authPassword);
+      }
+    };
+
+    return (
+      <div className="auth-container">
+        <div className="auth-card">
+          <div className="auth-header">
+            <h1 className="auth-logo">✈️ Travel AI</h1>
+            <p className="auth-subtitle">Your AI Travel Assistant</p>
+          </div>
+
+          <form className="auth-form" onSubmit={handleAuthSubmit}>
+            <div className="auth-form-group">
+              <label className="auth-label">Email</label>
+              <input
+                type="email"
+                className="auth-input"
+                placeholder="your@email.com"
+                value={authEmail}
+                onChange={(e) => setAuthEmail(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="auth-form-group">
+              <label className="auth-label">Password</label>
+              <input
+                type="password"
+                className="auth-input"
+                placeholder="••••••••"
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+                required
+              />
+            </div>
+
+            {authError && <div className="auth-error">{authError}</div>}
+            {error && <div className="auth-error">{error}</div>}
+
+            <button type="submit" className="auth-btn">
+              {isSignup ? 'Create Account' : 'Sign In'}
+            </button>
+          </form>
+
+          <div className="auth-toggle">
+            <p className="auth-toggle-text">
+              {isSignup ? 'Already have an account?' : "Don't have an account?"}
+              <button
+                type="button"
+                className="auth-toggle-btn"
+                onClick={() => setIsSignup(!isSignup)}
+              >
+                {isSignup ? 'Sign In' : 'Sign Up'}
+              </button>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Conditional rendering: Show auth if no token
+  if (!token) {
+    return <AuthPage />;
+  }
 
   return (
     <div className="app-container">

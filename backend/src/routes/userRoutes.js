@@ -6,6 +6,7 @@ const router = express.Router();
 router.get("/me", authMiddleware, (req, res) => {
   res.json({
     success: true,
+    data: req.user,
     user: req.user,
   });
 });

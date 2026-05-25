@@ -1,54 +1,55 @@
-import supabase from "../config/supabase.js";
+import jwt from 'jsonwebtoken';
+import supabase from '../config/supabase.js';
+
+const jwtSecret = process.env.JWT_SECRET || 'dev-jwt-secret-change-me';
 
 export const authMiddleware = async (req, res, next) => {
   const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!token) {
     return res.status(401).json({
       success: false,
-      error: "Unauthorized",
+      error: 'No token',
     });
   }
 
-  const token = authHeader.slice(7);
+  try {
+    const decoded = jwt.verify(token, jwtSecret);
 
-  const { data, error } = await supabase.auth.getUser(token);
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, email, tenant_id')
+      .eq('id', decoded.id)
+      .maybeSingle();
 
-  if (error || !data.user) {
-    console.error('AUTH ERROR: Invalid user from token:', error?.message);
+    if (profileError) {
+      console.error('Auth profile lookup error:', profileError.message);
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized',
+      });
+    }
+
+    if (!profile?.tenant_id) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized',
+      });
+    }
+
+    req.user = {
+      id: decoded.id,
+      email: decoded.email || profile.email,
+    };
+    req.tenantId = profile.tenant_id;
+
+    next();
+  } catch (error) {
+    console.error('JWT verification error:', error.message);
     return res.status(401).json({
       success: false,
-      error: "Unauthorized",
+      error: 'Invalid token',
     });
   }
-
-  console.log("TOKEN USER:", data.user.id);
-
-  const { data: profileData, error: profileError } = await supabase
-    .from("profiles")
-    .select("tenant_id")
-    .eq("id", data.user.id)
-    .single();
-
-  if (profileError) {
-    console.error('PROFILE ERROR:', profileError.message);
-    return res.status(400).json({
-      success: false,
-      error: "User profile not found",
-    });
-  }
-
-  if (!profileData || !profileData.tenant_id) {
-    console.error('PROFILE DATA missing:', profileData);
-    return res.status(400).json({
-      success: false,
-      error: "Tenant ID not found in profile",
-    });
-  }
-
-  console.log('PROFILE:', profileData);
-  console.log('TENANT ID:', profileData.tenant_id);
-  req.user = data.user;
-  req.tenantId = profileData.tenant_id;
-  next();
 };

@@ -6,18 +6,25 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const messageSchema = z.object({
+const sendMessageSchema = z.object({
   message: z.string().min(1, 'Message is required').max(1000, 'Message must be at most 1000 characters'),
+  conversationId: z.string().uuid().optional().nullable(),
 });
 
-// Helper: Detect booking intent
+const renameSchema = z.object({
+  title: z.string().trim().min(1, 'Title is required').max(120, 'Title must be at most 120 characters'),
+});
+
+const pinSchema = z.object({
+  is_pinned: z.boolean(),
+});
+
 const detectBookingIntent = (message) => {
   const bookingKeywords = ['book', 'trip', 'plan', 'travel', 'package', 'tour', 'booking'];
   const lowerMessage = message.toLowerCase();
-  return bookingKeywords.some(keyword => lowerMessage.includes(keyword));
+  return bookingKeywords.some((keyword) => lowerMessage.includes(keyword));
 };
 
-// Helper: Parse lead details from message
 const parseLeadDetails = (message) => {
   const details = {
     name: null,
@@ -26,8 +33,7 @@ const parseLeadDetails = (message) => {
     destination: null,
   };
 
-  // Simple regex patterns for extraction
-  const nameMatch = message.match(/(?:name\s+is\s+|i'm\s+|i am\s+)([A-Za-z\s]+?)(?:\,|and|email|$)/i);
+  const nameMatch = message.match(/(?:name\s+is\s+|i'm\s+|i am\s+)([A-Za-z\s]+?)(?:,|and|email|$)/i);
   if (nameMatch) details.name = nameMatch[1].trim();
 
   const emailMatch = message.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
@@ -36,50 +42,66 @@ const parseLeadDetails = (message) => {
   const phoneMatch = message.match(/(?:phone|contact|number)?\s*(\d{10}|\d{3}-\d{3}-\d{4}|\+\d{1,3}\d{9,})/);
   if (phoneMatch) details.phone = phoneMatch[1];
 
-  const destinationMatch = message.match(/(?:to\s+|destination\s+|trip\s+to\s+|visit\s+)([A-Za-z\s]+?)(?:\,|for|$)/i);
+  const destinationMatch = message.match(/(?:to\s+|destination\s+|trip\s+to\s+|visit\s+)([A-Za-z\s]+?)(?:,|for|$)/i);
   if (destinationMatch) details.destination = destinationMatch[1].trim();
 
   return details;
 };
 
-// Helper: Check if lead details are complete
-const hasLeadDetails = (details) => {
-  return details.name && details.email && (details.destination || details.phone);
+const hasLeadDetails = (details) => details.name && details.email && (details.destination || details.phone);
+
+const verifyConversationOwnership = async (conversationId, tenantId) => {
+  const { data, error } = await supabase
+    .from('conversations')
+    .select('id, tenant_id')
+    .eq('id', conversationId)
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
 };
+
+const buildConversationTitle = (message) => {
+  const normalized = message.trim().replace(/\s+/g, ' ');
+  return normalized.length > 60 ? `${normalized.slice(0, 57)}...` : normalized;
+};
+
+const isMissingTableColumnError = (error, columnName) =>
+  error?.message?.toLowerCase().includes(columnName.toLowerCase()) ||
+  error?.details?.toLowerCase().includes(columnName.toLowerCase());
 
 export const sendMessage = async (req, res) => {
   try {
-    console.log('BODY:', req.body);
+    console.log('Send message request:', req.body);
 
-    // Validate message with Zod
-    const validationResult = messageSchema.safeParse(req.body);
+    const validationResult = sendMessageSchema.safeParse(req.body);
     if (!validationResult.success) {
-      const errors = validationResult.error.errors.map(err => err.message);
-      return res.status(400).json({ error: errors[0] });
+      return res.status(400).json({
+        success: false,
+        error: validationResult.error.issues[0]?.message || 'Invalid input',
+      });
     }
 
-    const tenantId = req.tenantId || req.body.tenantId;
-    const { message, conversationId } = req.body;
-    console.log('TENANT:', tenantId);
-    console.log('MESSAGE:', message);
-    console.log('CONVERSATION_ID:', conversationId);
+    const tenantId = req.tenantId;
+    const { message, conversationId } = validationResult.data;
 
     if (!tenantId) {
-      return res.status(400).json({ error: 'Tenant ID is required' });
+      return res.status(400).json({
+        success: false,
+        error: 'Tenant ID is required',
+      });
     }
 
-    // Detect booking intent
     const hasBookingIntent = detectBookingIntent(message);
-    console.log('BOOKING INTENT:', hasBookingIntent);
 
     if (hasBookingIntent) {
-      // Parse lead details
       const leadDetails = parseLeadDetails(message);
-      console.log('LEAD DETAILS:', leadDetails);
 
       if (hasLeadDetails(leadDetails)) {
-        // Lead details are complete - save to leads table
-        console.log('Saving lead to database...');
         const { error: leadError } = await supabase.from('leads').insert([
           {
             tenant_id: tenantId,
@@ -92,117 +114,128 @@ export const sendMessage = async (req, res) => {
           },
         ]);
 
-        if (leadError) throw leadError;
-        console.log('Lead saved successfully');
+        if (leadError) {
+          throw leadError;
+        }
 
-        return res.json({
+        return res.status(200).json({
           success: true,
           data: {
             conversationId,
-            reply: "Thanks! Our travel expert will contact you shortly.",
+            reply: 'Thanks! Our travel expert will contact you shortly.',
             isLead: true,
           },
-          error: null,
         });
-      } else {
-        // Incomplete lead details - ask for more info
-        return res.json({
-          success: true,
-          data: {
-            conversationId,
-            reply: "Great! I'd love to help you plan your trip. Could you please provide: your name, email, and destination you're interested in?",
-            isLeadCollection: true,
-          },
-          error: null,
+      }
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          conversationId,
+          reply:
+            "Great! I'd love to help you plan your trip. Could you please provide: your name, email, and destination you're interested in?",
+          isLeadCollection: true,
+        },
+      });
+    }
+
+    let activeConversationId = conversationId ?? null;
+
+    if (activeConversationId) {
+      const existingConversation = await verifyConversationOwnership(activeConversationId, tenantId);
+      if (!existingConversation) {
+        return res.status(404).json({
+          success: false,
+          error: 'Conversation not found',
         });
       }
     }
 
-    // No booking intent - proceed with regular chat flow
-    // Create new conversation if needed
-    let activeConversationId = conversationId;
     if (!activeConversationId) {
-      const { data: newConversation, error: convError } = await supabase
+      const conversationPayload = {
+        tenant_id: tenantId,
+        title: buildConversationTitle(message),
+      };
+
+      let createConversation = await supabase
         .from('conversations')
-        .insert([{ tenant_id: tenantId }])
+        .insert([conversationPayload])
         .select('id')
         .single();
 
-      if (convError) throw convError;
-      activeConversationId = newConversation.id;
+      if (createConversation.error && isMissingTableColumnError(createConversation.error, 'title')) {
+        createConversation = await supabase
+          .from('conversations')
+          .insert([{ tenant_id: tenantId }])
+          .select('id')
+          .single();
+      }
+
+      if (createConversation.error) {
+        throw createConversation.error;
+      }
+
+      activeConversationId = createConversation.data.id;
     }
 
-    // Save user message
-    console.log('Saving user message...');
-    const { error: userMsgError } = await supabase
-      .from('messages')
-      .insert([
-        {
-          conversation_id: activeConversationId,
-          role: 'user',
-          content: message,
-        },
-      ]);
+    const { error: userMessageError } = await supabase.from('messages').insert([
+      {
+        conversation_id: activeConversationId,
+        role: 'user',
+        content: message,
+      },
+    ]);
 
-    if (userMsgError) throw userMsgError;
-    console.log('User message saved');
+    if (userMessageError) {
+      throw userMessageError;
+    }
 
-    // Fetch all messages for this conversation (ordered by created_at)
-    console.log('Fetching conversation history...');
     const { data: conversationHistory, error: historyError } = await supabase
       .from('messages')
       .select('role, content')
       .eq('conversation_id', activeConversationId)
       .order('created_at', { ascending: true });
 
-    if (historyError) throw historyError;
-    console.log('HISTORY:', conversationHistory);
+    if (historyError) {
+      throw historyError;
+    }
 
-    // Build messages array for OpenAI (map role and content)
     const messagesForOpenAI = conversationHistory.map((msg) => ({
       role: msg.role,
       content: msg.content,
     }));
 
-    // Send message to OpenAI
-    console.log('Calling OpenAI with', messagesForOpenAI.length, 'messages...');
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: messagesForOpenAI,
     });
 
-    const aiMessage = response.choices[0].message.content;
-    console.log('AI RESPONSE:', aiMessage);
+    const aiMessage = response.choices[0]?.message?.content?.trim() || 'I can help with that destination!';
 
-    // Save AI response
-    console.log('Saving AI response...');
-    const { error: aiMsgError } = await supabase
-      .from('messages')
-      .insert([
-        {
-          conversation_id: activeConversationId,
-          role: 'assistant',
-          content: aiMessage,
-        },
-      ]);
+    const { error: aiMessageError } = await supabase.from('messages').insert([
+      {
+        conversation_id: activeConversationId,
+        role: 'assistant',
+        content: aiMessage,
+      },
+    ]);
 
-    if (aiMsgError) throw aiMsgError;
-    console.log('AI response saved');
+    if (aiMessageError) {
+      throw aiMessageError;
+    }
 
-    // Return response
-    return res.json({
+    return res.status(200).json({
       success: true,
       data: {
         conversationId: activeConversationId,
         reply: aiMessage,
       },
-      error: null,
     });
   } catch (error) {
-    console.error('CHAT ERROR:', error);
+    console.error('Chat sendMessage error:', error);
     return res.status(500).json({
       success: false,
-      error: error.message,
+      error: error.message || 'Failed to send message',
     });
   }
 };
@@ -210,47 +243,272 @@ export const sendMessage = async (req, res) => {
 export const getHistory = async (req, res) => {
   try {
     const tenantId = req.tenantId;
-    console.log('Fetching history for tenant:', tenantId);
 
     if (!tenantId) {
-      return res.status(400).json({ error: 'Tenant ID is required' });
+      return res.status(400).json({
+        success: false,
+        error: 'Tenant ID is required',
+      });
     }
 
-    // Fetch all conversations for this tenant
-    const { data: conversations, error: convError } = await supabase
+    const { data: conversations, error: conversationsError } = await supabase
       .from('conversations')
       .select('id')
       .eq('tenant_id', tenantId)
       .order('created_at', { ascending: false });
 
-    if (convError) throw convError;
-    console.log('Found', conversations.length, 'conversations');
+    if (conversationsError) {
+      throw conversationsError;
+    }
 
-    // Fetch messages for each conversation
     const history = await Promise.all(
-      conversations.map(async (conv) => {
-        const { data: messages, error: msgError } = await supabase
+      conversations.map(async (conversation) => {
+        const { data: messages, error: messagesError } = await supabase
           .from('messages')
           .select('role, content, created_at')
-          .eq('conversation_id', conv.id)
+          .eq('conversation_id', conversation.id)
           .order('created_at', { ascending: true });
 
-        if (msgError) throw msgError;
+        if (messagesError) {
+          throw messagesError;
+        }
 
         return {
-          conversationId: conv.id,
+          conversationId: conversation.id,
           messages,
         };
       })
     );
 
-    console.log('HISTORY_RESPONSE:', history);
-    res.json(history);
+    return res.status(200).json({
+      success: true,
+      data: history,
+    });
   } catch (error) {
-    console.error('HISTORY ERROR:', error);
-    res.status(500).json({
+    console.error('Chat getHistory error:', error);
+    return res.status(500).json({
       success: false,
-      error: error.message,
+      error: error.message || 'Failed to fetch history',
+    });
+  }
+};
+
+export const getConversations = async (req, res) => {
+  try {
+    const tenantId = req.tenantId;
+
+    const { data: conversations, error } = await supabase
+      .from('conversations')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    const enrichedConversations = await Promise.all(
+      conversations.map(async (conversation) => {
+        const { data: lastMessage, error: lastMessageError } = await supabase
+          .from('messages')
+          .select('content, created_at')
+          .eq('conversation_id', conversation.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (lastMessageError) {
+          throw lastMessageError;
+        }
+
+        return {
+          id: conversation.id,
+          title: conversation.title || lastMessage?.content || 'New Chat',
+          is_pinned: Boolean(conversation.is_pinned),
+          created_at: conversation.created_at || lastMessage?.created_at || new Date().toISOString(),
+          updated_at: conversation.updated_at || lastMessage?.created_at || conversation.created_at,
+        };
+      })
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: enrichedConversations,
+    });
+  } catch (error) {
+    console.error('Chat getConversations error:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch conversations',
+    });
+  }
+};
+
+export const getConversationMessages = async (req, res) => {
+  try {
+    const tenantId = req.tenantId;
+    const { id } = req.params;
+
+    const conversation = await verifyConversationOwnership(id, tenantId);
+    if (!conversation) {
+      return res.status(404).json({
+        success: false,
+        error: 'Conversation not found',
+      });
+    }
+
+    const { data: messages, error } = await supabase
+      .from('messages')
+      .select('role, content, created_at')
+      .eq('conversation_id', id)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: messages,
+    });
+  } catch (error) {
+    console.error('Chat getConversationMessages error:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch messages',
+    });
+  }
+};
+
+export const renameConversation = async (req, res) => {
+  try {
+    const validationResult = renameSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      return res.status(400).json({
+        success: false,
+        error: validationResult.error.issues[0]?.message || 'Invalid input',
+      });
+    }
+
+    const tenantId = req.tenantId;
+    const { id } = req.params;
+    const conversation = await verifyConversationOwnership(id, tenantId);
+
+    if (!conversation) {
+      return res.status(404).json({
+        success: false,
+        error: 'Conversation not found',
+      });
+    }
+
+    const { data, error } = await supabase
+      .from('conversations')
+      .update({ title: validationResult.data.title })
+      .eq('id', id)
+      .eq('tenant_id', tenantId)
+      .select('*')
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    console.error('Chat renameConversation error:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to rename conversation',
+    });
+  }
+};
+
+export const pinConversation = async (req, res) => {
+  try {
+    const validationResult = pinSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      return res.status(400).json({
+        success: false,
+        error: validationResult.error.issues[0]?.message || 'Invalid input',
+      });
+    }
+
+    const tenantId = req.tenantId;
+    const { id } = req.params;
+    const conversation = await verifyConversationOwnership(id, tenantId);
+
+    if (!conversation) {
+      return res.status(404).json({
+        success: false,
+        error: 'Conversation not found',
+      });
+    }
+
+    const { data, error } = await supabase
+      .from('conversations')
+      .update({ is_pinned: validationResult.data.is_pinned })
+      .eq('id', id)
+      .eq('tenant_id', tenantId)
+      .select('*')
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    console.error('Chat pinConversation error:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to pin conversation',
+    });
+  }
+};
+
+export const deleteConversation = async (req, res) => {
+  try {
+    const tenantId = req.tenantId;
+    const { id } = req.params;
+
+    const conversation = await verifyConversationOwnership(id, tenantId);
+    if (!conversation) {
+      return res.status(404).json({
+        success: false,
+        error: 'Conversation not found',
+      });
+    }
+
+    const { error: deleteMessagesError } = await supabase.from('messages').delete().eq('conversation_id', id);
+    if (deleteMessagesError) {
+      throw deleteMessagesError;
+    }
+
+    const { error: deleteConversationError } = await supabase
+      .from('conversations')
+      .delete()
+      .eq('id', id)
+      .eq('tenant_id', tenantId);
+
+    if (deleteConversationError) {
+      throw deleteConversationError;
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: { id },
+    });
+  } catch (error) {
+    console.error('Chat deleteConversation error:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to delete conversation',
     });
   }
 };

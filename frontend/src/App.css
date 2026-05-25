@@ -39,7 +39,6 @@ body {
 .app-container { 
   display: flex; 
   height: 100vh; 
-  overflow: hidden;
   background: var(--bg-main);
 }
 
@@ -224,7 +223,24 @@ body {
   display: flex; 
   flex-direction: column; 
   position: relative;
-  overflow: hidden;
+  overflow-y: auto;
+}
+
+.main-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.main-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.main-content::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+
+.main-content::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
 }
 
 /* ====== HEADER ====== */
@@ -366,30 +382,13 @@ body {
 /* ====== CHAT WINDOW ====== */
 .chat-window { 
   flex: 1; 
-  overflow-y: auto; 
   overflow-x: hidden;
   padding: var(--spacing-2xl) var(--spacing-3xl); 
+  padding-bottom: calc(var(--spacing-3xl) + 96px);
   display: flex; 
   flex-direction: column; 
   gap: var(--spacing-lg);
   scroll-behavior: smooth;
-}
-
-.chat-window::-webkit-scrollbar {
-  width: 8px;
-}
-
-.chat-window::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.chat-window::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 4px;
-}
-
-.chat-window::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
 }
 
 /* ====== MESSAGES ====== */
@@ -480,7 +479,7 @@ body {
   flex-direction: column; 
   align-items: center; 
   justify-content: center; 
-  height: 100%;
+  min-height: 280px;
   text-align: center; 
   color: var(--text-main);
   padding: var(--spacing-2xl);
@@ -510,8 +509,10 @@ body {
   padding: var(--spacing-xl) var(--spacing-2xl); 
   background: white; 
   border-top: 1px solid var(--border-color);
-  flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
   box-shadow: 0 -1px 3px rgba(0,0,0,0.05);
+  z-index: 50;
 }
 
 .input-form { 
@@ -595,6 +596,10 @@ body {
   gap: var(--spacing-2xl);
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
+}
+
+.travel-search-section.empty-chat-layout {
+  flex: 1;
 }
 
 .search-container {
@@ -721,6 +726,7 @@ body {
   border-radius: 50%;
   background-size: cover;
   background-position: center;
+  background-color: #dbeafe;
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
   border: 4px solid white;
   transition: all 0.2s ease;
@@ -732,27 +738,43 @@ body {
 }
 
 .destination-image.goa {
-  background-image: url('https://images.unsplash.com/photo-1512407736550-32662f30ffe4?w=300&h=300&fit=crop');
+  background-image: url('https://images.pexels.com/photos/1450353/pexels-photo-1450353.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop');
 }
 
 .destination-image.bali {
-  background-image: url('https://images.unsplash.com/photo-1537225228614-b4fad34a0b60?w=300&h=300&fit=crop');
+  background-image: url('https://images.pexels.com/photos/2474690/pexels-photo-2474690.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop');
 }
 
 .destination-image.dubai {
-  background-image: url('https://images.unsplash.com/photo-1512453502162-7acaaf00acc4?w=300&h=300&fit=crop');
+  background-image: url('https://images.pexels.com/photos/823696/pexels-photo-823696.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop');
 }
 
 .destination-image.manali {
-  background-image: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=300&h=300&fit=crop');
+  background-image: url('https://images.pexels.com/photos/1366919/pexels-photo-1366919.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop');
 }
 
 .destination-image.kerala {
-  background-image: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=300&h=300&fit=crop');
+  background-image: url('https://images.pexels.com/photos/962464/pexels-photo-962464.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop');
 }
 
 .destination-image.jaipur {
-  background-image: url('https://images.unsplash.com/photo-1564507592333-c60657eea523?w=300&h=300&fit=crop');
+  background-image: url('https://images.pexels.com/photos/3581364/pexels-photo-3581364.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop');
+}
+
+.destination-image.singapore {
+  background-image: url('https://images.pexels.com/photos/3152126/pexels-photo-3152126.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop');
+}
+
+.destination-image.paris {
+  background-image: url('https://images.pexels.com/photos/532826/pexels-photo-532826.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop');
+}
+
+.destination-image.maldives {
+  background-image: url('https://images.pexels.com/photos/1287460/pexels-photo-1287460.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop');
+}
+
+.destination-image.tokyo {
+  background-image: url('https://images.pexels.com/photos/2187605/pexels-photo-2187605.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop');
 }
 
 .destination-name {
@@ -856,6 +878,7 @@ body {
 
   .chat-window {
     padding: var(--spacing-lg) var(--spacing-lg);
+    padding-bottom: calc(var(--spacing-lg) + 92px);
   }
 
   .input-area {

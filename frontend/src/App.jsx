@@ -6,20 +6,20 @@ function App() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  
+
   // Auth state
   const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [email, setEmail] = useState(''); // Would come from auth system normally
-  
+
   // Sidebar state
   const [conversationId, setConversationId] = useState(null);
   const [conversations, setConversations] = useState([]);
 
   // Travel dates state
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [duration, setDuration] = useState(0);
-  
+
   const messagesEndRef = useRef(null);
 
   // Auto calculate duration
@@ -54,7 +54,7 @@ function App() {
         setConversations(data.data);
       }
     } catch (err) {
-      console.error("Error fetching conversations:", err);
+      console.error('Error fetching conversations:', err);
     }
   };
 
@@ -64,13 +64,13 @@ function App() {
   }, [token]);
 
   const handleDelete = async (id) => {
-    const confirmDelete = window.confirm("Are you sure you want to delete this chat?");
+    const confirmDelete = window.confirm('Are you sure you want to delete this chat?');
     if (!confirmDelete) return;
 
     try {
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
       await fetch(`${backendUrl}/api/chat/conversations/${id}`, {
-        method: "DELETE",
+        method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -81,7 +81,7 @@ function App() {
         setMessages([]);
       }
     } catch (err) {
-      console.error("Error deleting conversation", err);
+      console.error('Error deleting conversation', err);
     }
   };
 
@@ -91,16 +91,16 @@ function App() {
     try {
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
       await fetch(`${backendUrl}/api/chat/conversations/${id}/rename`, {
-        method: "PATCH",
+        method: 'PATCH',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ title: newTitle }),
       });
       fetchConversations();
     } catch (err) {
-      console.error("Error renaming conversation", err);
+      console.error('Error renaming conversation', err);
     }
   };
 
@@ -108,27 +108,27 @@ function App() {
     try {
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
       await fetch(`${backendUrl}/api/chat/conversations/${id}/pin`, {
-        method: "PATCH",
+        method: 'PATCH',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ is_pinned: !currentState }),
       });
       fetchConversations();
     } catch (err) {
-      console.error("Error pinning conversation", err);
+      console.error('Error pinning conversation', err);
     }
   };
 
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState(null);
-  const [editingTitle, setEditingTitle] = useState("");
+  const [editingTitle, setEditingTitle] = useState('');
 
   // Travel search state
-  const [location, setLocation] = useState("");
-  const [guests, setGuests] = useState("2");
-  const [priceRange, setPriceRange] = useState("all");
+  const [location, setLocation] = useState('');
+  const [guests, setGuests] = useState('2');
+  const [priceRange, setPriceRange] = useState('all');
 
   const filteredConversations = conversations.filter((conv) =>
     conv.title?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -137,7 +137,7 @@ function App() {
   const groupByDate = (conversationsList) => {
     const groups = {
       Today: [],
-      "Last 7 Days": [],
+      'Last 7 Days': [],
       Older: [],
     };
     const now = new Date();
@@ -147,26 +147,26 @@ function App() {
       const diff = (now - created) / (1000 * 60 * 60 * 24);
 
       if (diff < 1) groups.Today.push(conv);
-      else if (diff < 7) groups["Last 7 Days"].push(conv);
+      else if (diff < 7) groups['Last 7 Days'].push(conv);
       else groups.Older.push(conv);
     });
 
     return groups;
   };
 
-  const unpinnedConversations = filteredConversations.filter(c => !c.is_pinned);
-  const pinnedConversations = filteredConversations.filter(c => c.is_pinned);
+  const unpinnedConversations = filteredConversations.filter((c) => !c.is_pinned);
+  const pinnedConversations = filteredConversations.filter((c) => c.is_pinned);
   const grouped = groupByDate(unpinnedConversations);
 
   const renderConversation = (conv) => (
-    <div 
-      key={conv.id} 
+    <div
+      key={conv.id}
       className={`history-item ${conversationId === conv.id ? 'active' : ''}`}
-      style={{ 
-        display: "flex", 
-        justifyContent: "space-between", 
-        alignItems: "center",
-        position: "relative"
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        position: 'relative',
       }}
     >
       {editingId === conv.id ? (
@@ -180,10 +180,10 @@ function App() {
             setEditingId(null);
           }}
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
+            if (e.key === 'Enter') {
               handleRename(conv.id, editingTitle);
               setEditingId(null);
-            } else if (e.key === "Escape") {
+            } else if (e.key === 'Escape') {
               setEditingId(null);
             }
           }}
@@ -191,42 +191,48 @@ function App() {
           onClick={(e) => e.stopPropagation()}
         />
       ) : (
-        <span 
+        <span
           onClick={() => loadMessages(conv.id)}
-          style={{ 
-            overflow: "hidden", 
-            textOverflow: "ellipsis", 
-            whiteSpace: "nowrap",
+          style={{
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
             flex: 1,
-            cursor: "pointer"
+            cursor: 'pointer',
           }}
-          title={conv.title || "New Chat"}
+          title={conv.title || 'New Chat'}
         >
-          💬 {conv.title || "New Chat"}
+          💬 {conv.title || 'New Chat'}
         </span>
       )}
 
-      <div className="history-item-actions" style={{ display: "flex", gap: "8px", marginLeft: "8px" }}>
-        <button 
-          onClick={(e) => { 
-            e.stopPropagation(); 
+      <div className="history-item-actions" style={{ display: 'flex', gap: '8px', marginLeft: '8px' }}>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
             setEditingId(conv.id);
-            setEditingTitle(conv.title || "");
-          }} 
+            setEditingTitle(conv.title || '');
+          }}
           className="history-action-btn"
           title="Rename"
         >
           ✏️
         </button>
-        <button 
-          onClick={(e) => { e.stopPropagation(); handlePin(conv.id, conv.is_pinned); }} 
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handlePin(conv.id, conv.is_pinned);
+          }}
           className="history-action-btn"
-          title={conv.is_pinned ? "Unpin" : "Pin"}
+          title={conv.is_pinned ? 'Unpin' : 'Pin'}
         >
-          {conv.is_pinned ? "📌" : "📍"}
+          {conv.is_pinned ? '📌' : '📍'}
         </button>
-        <button 
-          onClick={(e) => { e.stopPropagation(); handleDelete(conv.id); }} 
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handleDelete(conv.id);
+          }}
           className="history-action-btn delete"
           title="Delete"
         >
@@ -242,14 +248,11 @@ function App() {
     setLoading(true);
     try {
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
-      const res = await fetch(
-        `${backendUrl}/api/chat/messages/${id}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const res = await fetch(`${backendUrl}/api/chat/messages/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       const data = await res.json();
       if (data.success) {
         const formatted = data.data.map((msg) => ({
@@ -259,8 +262,8 @@ function App() {
         setMessages(formatted);
       }
     } catch (err) {
-      console.error("Error loading messages:", err);
-      setError("Failed to load conversation");
+      console.error('Error loading messages:', err);
+      setError('Failed to load conversation');
     } finally {
       setLoading(false);
     }
@@ -269,18 +272,22 @@ function App() {
   const handleNewChat = () => {
     setMessages([]);
     setConversationId(null);
-    setInput("");
+    setInput('');
   };
 
   const handleSearch = () => {
     if (!location.trim()) {
-      alert("Please enter a destination");
+      alert('Please enter a destination');
       return;
     }
-    
-    const searchMessage = `I want to book a trip to ${location} for ${guests} ${guests === "1" ? "person" : "people"} from ${startDate || "flexible dates"} to ${endDate || "flexible dates"}${priceRange !== "all" ? ` with a ${priceRange} budget` : ""}. Can you suggest some packages?`;
+
+    const searchMessage = `I want to book a trip to ${location} for ${guests} ${
+      guests === '1' ? 'person' : 'people'
+    } from ${startDate || 'flexible dates'} to ${endDate || 'flexible dates'}${
+      priceRange !== 'all' ? ` with a ${priceRange} budget` : ''
+    }. Can you suggest some packages?`;
     handleQuickSend(searchMessage, true);
-    setLocation("");
+    setLocation('');
   };
 
   const handleLogout = () => {
@@ -300,26 +307,24 @@ function App() {
 
   const sendMessage = async (e, directText = null) => {
     if (e) e.preventDefault();
-    
+
     const messageContent = directText !== null ? directText : input;
     if (!messageContent.trim()) return;
 
-    // Add user message
     const userMessage = { role: 'user', content: messageContent };
-    setMessages(prev => [...prev, userMessage]);
-    
+    setMessages((prev) => [...prev, userMessage]);
+
     setInput('');
     setLoading(true);
     setError(null);
 
-    // MOCK RESPONSE LOGIC (Replace this with explicit backend call)
     try {
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
       const response = await fetch(`${backendUrl}/api/chat/send`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`, // Remove if bypassing auth for dev
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           message: messageContent,
@@ -337,11 +342,10 @@ function App() {
       }
 
       setConversationId(data?.data?.conversationId || conversationId);
-      
-      // OPTIONAL: Refresh sidebar conversations so it shows up if it's new
+
       if (!conversationId && data?.data?.conversationId) {
         const res = await fetch(`${backendUrl}/api/chat/conversations`, {
-           headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
         });
         const cData = await res.json();
         if (cData.success) {
@@ -349,12 +353,20 @@ function App() {
         }
       }
 
-      setMessages(prev => [...prev, { role: 'assistant', content: data?.data?.reply || "I can help with that destination!" }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: data?.data?.reply || 'I can help with that destination!' },
+      ]);
     } catch (err) {
-      console.warn("Backend failed, using mock response", err);
-      // Fallback mock response for UI demonstration
+      console.warn('Backend failed, using mock response', err);
       setTimeout(() => {
-        setMessages(prev => [...prev, { role: 'assistant', content: `That sounds like a great trip! I can help you plan a package for ${messageContent}. Could you tell me how many people are traveling and your preferred travel dates?` }]);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: `That sounds like a great trip! I can help you plan a package for ${messageContent}. Could you tell me how many people are traveling and your preferred travel dates?`,
+          },
+        ]);
         setLoading(false);
       }, 1000);
       return;
@@ -365,7 +377,6 @@ function App() {
 
   return (
     <div className="app-container">
-      {/* 1. Sidebar (Bonus Feature) */}
       <aside className="sidebar">
         <div className="sidebar-header">
           <h2 className="app-logo">✈️ Travel AI</h2>
@@ -373,62 +384,77 @@ function App() {
             + New Chat
           </button>
         </div>
-        <div className="history-list" style={{ padding: "0 10px" }}>
+        <div className="history-list" style={{ padding: '0 10px' }}>
           <input
             placeholder="Search chats..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
-              width: "100%",
-              padding: "8px",
-              borderRadius: "8px",
-              marginBottom: "10px",
-              border: "1px solid var(--border-color)",
-              background: "var(--bg-secondary)",
-              color: "var(--text-main)"
+              width: '100%',
+              padding: '8px',
+              borderRadius: '8px',
+              marginBottom: '10px',
+              border: '1px solid var(--border-color)',
+              background: 'var(--bg-secondary)',
+              color: 'var(--text-main)',
             }}
           />
 
           {pinnedConversations.length > 0 && (
-            <div style={{ marginBottom: "15px" }}>
-              <h4 style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "5px", paddingLeft: "10px" }}>📌 Pinned</h4>
+            <div style={{ marginBottom: '15px' }}>
+              <h4 style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '5px', paddingLeft: '10px' }}>
+                📌 Pinned
+              </h4>
               {pinnedConversations.map(renderConversation)}
             </div>
           )}
 
-          {Object.entries(grouped).map(([group, convs]) => (
-            convs.length > 0 && (
-              <div key={group} style={{ marginBottom: "15px" }}>
-                <h4 style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "5px", paddingLeft: "10px" }}>{group}</h4>
-                {convs.map(renderConversation)}
-              </div>
-            )
-          ))}
+          {Object.entries(grouped).map(
+            ([group, convs]) =>
+              convs.length > 0 && (
+                <div key={group} style={{ marginBottom: '15px' }}>
+                  <h4
+                    style={{
+                      fontSize: '12px',
+                      color: 'var(--text-muted)',
+                      marginBottom: '5px',
+                      paddingLeft: '10px',
+                    }}
+                  >
+                    {group}
+                  </h4>
+                  {convs.map(renderConversation)}
+                </div>
+              )
+          )}
         </div>
       </aside>
 
-      {/* 2. Main Chat Area */}
       <main className="main-content">
-        
-        {/* Header */}
         <header className="chat-header">
           <div>
             <h1 className="header-title">✈️ AI Travel Assistant</h1>
             <p className="header-subtitle">Plan your perfect trip</p>
           </div>
           <div>
-            <button className="logout-btn-header" onClick={handleLogout}>Log Out</button>
+            <button className="logout-btn-header" onClick={handleLogout}>
+              Log Out
+            </button>
           </div>
         </header>
 
-        {/* Error Banner */}
         {error && (
           <div className="error-banner">
-            ⚠️ {error} <button onClick={() => setError(null)} style={{background: 'none', border:'none', cursor:'pointer', float:'right'}}>✕</button>
+            ⚠️ {error}{' '}
+            <button
+              onClick={() => setError(null)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', float: 'right' }}
+            >
+              ✕
+            </button>
           </div>
         )}
 
-        {/* Travel Dates Widget - Moved to Top */}
         <div className="travel-dates-section">
           <div className="date-group">
             <label className="date-label">Departure</label>
@@ -457,21 +483,15 @@ function App() {
 
           {duration > 0 && (
             <div className="duration-badge">
-              <span style={{ fontSize: "1.1rem" }}>🗓️</span> {duration} {duration === 1 ? "day" : "days"}
+              <span style={{ fontSize: '1.1rem' }}>🗓️</span> {duration} {duration === 1 ? 'day' : 'days'}
             </div>
           )}
-          
-          {startDate && endDate && duration === 0 && (
-            <div className="duration-badge error">
-              ⚠️ Invalid Dates
-            </div>
-          )}
+
+          {startDate && endDate && duration === 0 && <div className="duration-badge error">⚠️ Invalid Dates</div>}
         </div>
 
-        {/* Travel Search UI - Clean Dashboard */}
         {messages.length === 0 && (
-          <div className="travel-search-section">
-            {/* Search Container */}
+          <div className="travel-search-section empty-chat-layout">
             <div className="search-container">
               <div className="search-row">
                 <div className="search-field">
@@ -482,17 +502,13 @@ function App() {
                     placeholder="Where to?"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
-                    onKeyPress={(e) => e.key === "Enter" && handleSearch()}
+                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
                   />
                 </div>
 
                 <div className="search-field">
                   <label className="search-label">Guests</label>
-                  <select
-                    className="search-select"
-                    value={guests}
-                    onChange={(e) => setGuests(e.target.value)}
-                  >
+                  <select className="search-select" value={guests} onChange={(e) => setGuests(e.target.value)}>
                     <option value="1">1 Guest</option>
                     <option value="2">2 Guests</option>
                     <option value="3">3 Guests</option>
@@ -503,11 +519,7 @@ function App() {
 
                 <div className="search-field">
                   <label className="search-label">Budget</label>
-                  <select
-                    className="search-select"
-                    value={priceRange}
-                    onChange={(e) => setPriceRange(e.target.value)}
-                  >
+                  <select className="search-select" value={priceRange} onChange={(e) => setPriceRange(e.target.value)}>
                     <option value="all">All Budgets</option>
                     <option value="budget">Budget</option>
                     <option value="standard">Standard</option>
@@ -522,102 +534,128 @@ function App() {
               </button>
             </div>
 
-            {/* Destination Grid */}
             <div className="dashboard-section">
               <h3 className="dashboard-section-title">🌍 Popular Destinations</h3>
               <div className="destinations-grid">
-                <div className="destination-card" onClick={() => { setLocation("Goa"); }}>
+                <div className="destination-card" onClick={() => setLocation('Goa')}>
                   <div className="destination-image goa"></div>
                   <h3 className="destination-name">Goa</h3>
                   <p className="destination-desc">Beaches & Nightlife</p>
                 </div>
 
-                <div className="destination-card" onClick={() => { setLocation("Bali"); }}>
+                <div className="destination-card" onClick={() => setLocation('Bali')}>
                   <div className="destination-image bali"></div>
                   <h3 className="destination-name">Bali</h3>
                   <p className="destination-desc">Island Paradise</p>
                 </div>
 
-                <div className="destination-card" onClick={() => { setLocation("Dubai"); }}>
+                <div className="destination-card" onClick={() => setLocation('Dubai')}>
                   <div className="destination-image dubai"></div>
                   <h3 className="destination-name">Dubai</h3>
                   <p className="destination-desc">Luxury & Adventure</p>
                 </div>
 
-                <div className="destination-card" onClick={() => { setLocation("Manali"); }}>
+                <div className="destination-card" onClick={() => setLocation('Manali')}>
                   <div className="destination-image manali"></div>
                   <h3 className="destination-name">Manali</h3>
                   <p className="destination-desc">Mountains & Snow</p>
                 </div>
 
-                <div className="destination-card" onClick={() => { setLocation("Kerala"); }}>
+                <div className="destination-card" onClick={() => setLocation('Kerala')}>
                   <div className="destination-image kerala"></div>
                   <h3 className="destination-name">Kerala</h3>
                   <p className="destination-desc">Backwaters & Nature</p>
                 </div>
 
-                <div className="destination-card" onClick={() => { setLocation("Jaipur"); }}>
+                <div className="destination-card" onClick={() => setLocation('Jaipur')}>
                   <div className="destination-image jaipur"></div>
                   <h3 className="destination-name">Jaipur</h3>
                   <p className="destination-desc">Heritage & Culture</p>
                 </div>
+
+                <div className="destination-card" onClick={() => setLocation('Singapore')}>
+                  <div className="destination-image singapore"></div>
+                  <h3 className="destination-name">Singapore</h3>
+                  <p className="destination-desc">City Lights & Family Fun</p>
+                </div>
+
+                <div className="destination-card" onClick={() => setLocation('Paris')}>
+                  <div className="destination-image paris"></div>
+                  <h3 className="destination-name">Paris</h3>
+                  <p className="destination-desc">Romance & Art</p>
+                </div>
+
+                <div className="destination-card" onClick={() => setLocation('Maldives')}>
+                  <div className="destination-image maldives"></div>
+                  <h3 className="destination-name">Maldives</h3>
+                  <p className="destination-desc">Beaches & Water Villas</p>
+                </div>
+
+                <div className="destination-card" onClick={() => setLocation('Tokyo')}>
+                  <div className="destination-image tokyo"></div>
+                  <h3 className="destination-name">Tokyo</h3>
+                  <p className="destination-desc">Culture & Neon Streets</p>
+                </div>
               </div>
             </div>
 
-            {/* Travel Categories */}
             <div className="dashboard-section">
               <h3 className="dashboard-section-title">🎯 Travel Style</h3>
               <div className="pills-container">
-                <button className="pill-btn" onClick={() => handleQuickSend("Budget travel options", true)}>💰 Budget</button>
-                <button className="pill-btn" onClick={() => handleQuickSend("Luxury travel options", true)}>👑 Luxury</button>
-                <button className="pill-btn" onClick={() => handleQuickSend("Adventure travel options", true)}>⛰️ Adventure</button>
+                <button className="pill-btn" onClick={() => handleQuickSend('Budget travel options', true)}>
+                  💰 Budget
+                </button>
+                <button className="pill-btn" onClick={() => handleQuickSend('Luxury travel options', true)}>
+                  👑 Luxury
+                </button>
+                <button className="pill-btn" onClick={() => handleQuickSend('Adventure travel options', true)}>
+                  ⛰️ Adventure
+                </button>
               </div>
             </div>
 
-            {/* Trip Types */}
             <div className="dashboard-section">
               <h3 className="dashboard-section-title">✨ Trip Type</h3>
               <div className="pills-container">
-                <button className="pill-btn" onClick={() => handleQuickSend("Planning a family trip", true)}>👨‍👩‍👧‍👦 Family Trip</button>
-                <button className="pill-btn" onClick={() => handleQuickSend("Planning a birthday trip", true)}>🎂 Birthday Trip</button>
-                <button className="pill-btn" onClick={() => handleQuickSend("Trip with friends", true)}>👫 Trip with Friends</button>
-                <button className="pill-btn" onClick={() => handleQuickSend("Corporate travel options", true)}>💼 Corporate Trip</button>
+                <button className="pill-btn" onClick={() => handleQuickSend('Planning a family trip', true)}>
+                  👨‍👩‍👧‍👦 Family Trip
+                </button>
+                <button className="pill-btn" onClick={() => handleQuickSend('Planning a birthday trip', true)}>
+                  🎂 Birthday Trip
+                </button>
+                <button className="pill-btn" onClick={() => handleQuickSend('Trip with friends', true)}>
+                  👫 Trip with Friends
+                </button>
+                <button className="pill-btn" onClick={() => handleQuickSend('Corporate travel options', true)}>
+                  💼 Corporate Trip
+                </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Chat Window */}
-        <div className="chat-window">
-          {messages.length === 0 && (
-            <div className="empty-state">
-              <div className="empty-icon">�</div>
-              <h2 className="empty-title">Start Chatting</h2>
-              <p className="empty-subtitle">Ask questions about your trip anytime</p>
-            </div>
-          )}
-
-          {messages.map((msg, index) => (
-            <div key={index} className={`message-row ${msg.role}`}>
-              <div className="message-bubble">
-                {msg.content}
+        {(messages.length > 0 || loading) && (
+          <div className="chat-window">
+            {messages.map((msg, index) => (
+              <div key={index} className={`message-row ${msg.role}`}>
+                <div className="message-bubble">{msg.content}</div>
               </div>
-            </div>
-          ))}
+            ))}
 
-          {/* Typing Indicator */}
-          {loading && (
-            <div className="message-row ai">
-              <div className="typing-indicator">
-                AI is typing... <span className="dot"></span><span className="dot"></span><span className="dot"></span>
+            {loading && (
+              <div className="message-row ai">
+                <div className="typing-indicator">
+                  AI is typing... <span className="dot"></span>
+                  <span className="dot"></span>
+                  <span className="dot"></span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <div ref={messagesEndRef} />
-        </div>
+            <div ref={messagesEndRef} />
+          </div>
+        )}
 
-        {/* Lead Capture/Input Area */}
         <div className="input-area">
           <form className="input-form" onSubmit={(e) => sendMessage(e)}>
             <input

@@ -85,6 +85,25 @@ function App() {
     }
   };
 
+  const handleRename = async (id, newTitle) => {
+    if (!newTitle.trim()) return;
+
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+      await fetch(`${backendUrl}/api/chat/conversations/${id}/rename`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ title: newTitle }),
+      });
+      fetchConversations();
+    } catch (err) {
+      console.error("Error renaming conversation", err);
+    }
+  };
+
   const handlePin = async (id, currentState) => {
     try {
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
@@ -103,6 +122,13 @@ function App() {
   };
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [editingTitle, setEditingTitle] = useState("");
+
+  // Travel search state
+  const [location, setLocation] = useState("");
+  const [guests, setGuests] = useState("2");
+  const [priceRange, setPriceRange] = useState("all");
 
   const filteredConversations = conversations.filter((conv) =>
     conv.title?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -136,24 +162,72 @@ function App() {
     <div 
       key={conv.id} 
       className={`history-item ${conversationId === conv.id ? 'active' : ''}`}
-      onClick={() => loadMessages(conv.id)}
-      style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+      style={{ 
+        display: "flex", 
+        justifyContent: "space-between", 
+        alignItems: "center",
+        position: "relative"
+      }}
     >
-      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        💬 {conv.title || "New Chat"}
-      </span>
+      {editingId === conv.id ? (
+        <input
+          type="text"
+          className="history-item-edit"
+          value={editingTitle}
+          onChange={(e) => setEditingTitle(e.target.value)}
+          onBlur={() => {
+            handleRename(conv.id, editingTitle);
+            setEditingId(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              handleRename(conv.id, editingTitle);
+              setEditingId(null);
+            } else if (e.key === "Escape") {
+              setEditingId(null);
+            }
+          }}
+          autoFocus
+          onClick={(e) => e.stopPropagation()}
+        />
+      ) : (
+        <span 
+          onClick={() => loadMessages(conv.id)}
+          style={{ 
+            overflow: "hidden", 
+            textOverflow: "ellipsis", 
+            whiteSpace: "nowrap",
+            flex: 1,
+            cursor: "pointer"
+          }}
+          title={conv.title || "New Chat"}
+        >
+          💬 {conv.title || "New Chat"}
+        </span>
+      )}
 
-      <div className="history-item-actions" style={{ display: "flex", gap: "5px" }}>
+      <div className="history-item-actions" style={{ display: "flex", gap: "8px", marginLeft: "8px" }}>
+        <button 
+          onClick={(e) => { 
+            e.stopPropagation(); 
+            setEditingId(conv.id);
+            setEditingTitle(conv.title || "");
+          }} 
+          className="history-action-btn"
+          title="Rename"
+        >
+          ✏️
+        </button>
         <button 
           onClick={(e) => { e.stopPropagation(); handlePin(conv.id, conv.is_pinned); }} 
-          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px' }}
+          className="history-action-btn"
           title={conv.is_pinned ? "Unpin" : "Pin"}
         >
           {conv.is_pinned ? "📌" : "📍"}
         </button>
         <button 
           onClick={(e) => { e.stopPropagation(); handleDelete(conv.id); }} 
-          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px' }}
+          className="history-action-btn delete"
           title="Delete"
         >
           🗑️
@@ -195,6 +269,18 @@ function App() {
   const handleNewChat = () => {
     setMessages([]);
     setConversationId(null);
+    setInput("");
+  };
+
+  const handleSearch = () => {
+    if (!location.trim()) {
+      alert("Please enter a destination");
+      return;
+    }
+    
+    const searchMessage = `I want to book a trip to ${location} for ${guests} ${guests === "1" ? "person" : "people"} from ${startDate || "flexible dates"} to ${endDate || "flexible dates"}${priceRange !== "all" ? ` with a ${priceRange} budget` : ""}. Can you suggest some packages?`;
+    handleQuickSend(searchMessage, true);
+    setLocation("");
   };
 
   const handleLogout = () => {
@@ -342,44 +428,172 @@ function App() {
           </div>
         )}
 
+        {/* Travel Dates Widget - Moved to Top */}
+        <div className="travel-dates-section">
+          <div className="date-group">
+            <label className="date-label">Departure</label>
+            <input
+              type="date"
+              className="date-input"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              title="Select departure date"
+            />
+          </div>
+
+          <div className="date-separator">→</div>
+
+          <div className="date-group">
+            <label className="date-label">Return</label>
+            <input
+              type="date"
+              className="date-input"
+              value={endDate}
+              min={startDate || undefined}
+              onChange={(e) => setEndDate(e.target.value)}
+              title="Select return date"
+            />
+          </div>
+
+          {duration > 0 && (
+            <div className="duration-badge">
+              <span style={{ fontSize: "1.1rem" }}>🗓️</span> {duration} {duration === 1 ? "day" : "days"}
+            </div>
+          )}
+          
+          {startDate && endDate && duration === 0 && (
+            <div className="duration-badge error">
+              ⚠️ Invalid Dates
+            </div>
+          )}
+        </div>
+
+        {/* Travel Search UI - Clean Dashboard */}
+        {messages.length === 0 && (
+          <div className="travel-search-section">
+            {/* Search Container */}
+            <div className="search-container">
+              <div className="search-row">
+                <div className="search-field">
+                  <label className="search-label">Destination</label>
+                  <input
+                    type="text"
+                    className="search-input"
+                    placeholder="Where to?"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    onKeyPress={(e) => e.key === "Enter" && handleSearch()}
+                  />
+                </div>
+
+                <div className="search-field">
+                  <label className="search-label">Guests</label>
+                  <select
+                    className="search-select"
+                    value={guests}
+                    onChange={(e) => setGuests(e.target.value)}
+                  >
+                    <option value="1">1 Guest</option>
+                    <option value="2">2 Guests</option>
+                    <option value="3">3 Guests</option>
+                    <option value="4">4 Guests</option>
+                    <option value="5">5+ Guests</option>
+                  </select>
+                </div>
+
+                <div className="search-field">
+                  <label className="search-label">Budget</label>
+                  <select
+                    className="search-select"
+                    value={priceRange}
+                    onChange={(e) => setPriceRange(e.target.value)}
+                  >
+                    <option value="all">All Budgets</option>
+                    <option value="budget">Budget</option>
+                    <option value="standard">Standard</option>
+                    <option value="premium">Premium</option>
+                    <option value="luxury">Luxury</option>
+                  </select>
+                </div>
+              </div>
+
+              <button className="search-btn" onClick={handleSearch}>
+                🔍 SEARCH TRIPS
+              </button>
+            </div>
+
+            {/* Destination Grid */}
+            <div className="dashboard-section">
+              <h3 className="dashboard-section-title">🌍 Popular Destinations</h3>
+              <div className="destinations-grid">
+                <div className="destination-card" onClick={() => { setLocation("Goa"); }}>
+                  <div className="destination-image goa"></div>
+                  <h3 className="destination-name">Goa</h3>
+                  <p className="destination-desc">Beaches & Nightlife</p>
+                </div>
+
+                <div className="destination-card" onClick={() => { setLocation("Bali"); }}>
+                  <div className="destination-image bali"></div>
+                  <h3 className="destination-name">Bali</h3>
+                  <p className="destination-desc">Island Paradise</p>
+                </div>
+
+                <div className="destination-card" onClick={() => { setLocation("Dubai"); }}>
+                  <div className="destination-image dubai"></div>
+                  <h3 className="destination-name">Dubai</h3>
+                  <p className="destination-desc">Luxury & Adventure</p>
+                </div>
+
+                <div className="destination-card" onClick={() => { setLocation("Manali"); }}>
+                  <div className="destination-image manali"></div>
+                  <h3 className="destination-name">Manali</h3>
+                  <p className="destination-desc">Mountains & Snow</p>
+                </div>
+
+                <div className="destination-card" onClick={() => { setLocation("Kerala"); }}>
+                  <div className="destination-image kerala"></div>
+                  <h3 className="destination-name">Kerala</h3>
+                  <p className="destination-desc">Backwaters & Nature</p>
+                </div>
+
+                <div className="destination-card" onClick={() => { setLocation("Jaipur"); }}>
+                  <div className="destination-image jaipur"></div>
+                  <h3 className="destination-name">Jaipur</h3>
+                  <p className="destination-desc">Heritage & Culture</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Travel Categories */}
+            <div className="dashboard-section">
+              <h3 className="dashboard-section-title">🎯 Travel Style</h3>
+              <div className="pills-container">
+                <button className="pill-btn" onClick={() => handleQuickSend("Budget travel options", true)}>💰 Budget</button>
+                <button className="pill-btn" onClick={() => handleQuickSend("Luxury travel options", true)}>👑 Luxury</button>
+                <button className="pill-btn" onClick={() => handleQuickSend("Adventure travel options", true)}>⛰️ Adventure</button>
+              </div>
+            </div>
+
+            {/* Trip Types */}
+            <div className="dashboard-section">
+              <h3 className="dashboard-section-title">✨ Trip Type</h3>
+              <div className="pills-container">
+                <button className="pill-btn" onClick={() => handleQuickSend("Planning a family trip", true)}>👨‍👩‍👧‍👦 Family Trip</button>
+                <button className="pill-btn" onClick={() => handleQuickSend("Planning a birthday trip", true)}>🎂 Birthday Trip</button>
+                <button className="pill-btn" onClick={() => handleQuickSend("Trip with friends", true)}>👫 Trip with Friends</button>
+                <button className="pill-btn" onClick={() => handleQuickSend("Corporate travel options", true)}>💼 Corporate Trip</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Chat Window */}
         <div className="chat-window">
           {messages.length === 0 && (
             <div className="empty-state">
-              <div className="empty-icon">👋</div>
-              <h2 className="empty-title">Welcome to AI Travel Assistant</h2>
-              <p className="empty-subtitle">Ask me about trips, destinations, or bookings.</p>
-              
-              <div className="discovery-sections">
-                <div className="discovery-section">
-                  <h3 className="section-heading">🌍 Popular Destinations</h3>
-                  <div className="discovery-grid">
-                    <button className="discovery-btn" onClick={() => handleQuickSend("Tell me about Goa packages", true)}>🌴 Goa</button>
-                    <button className="discovery-btn" onClick={() => handleQuickSend("Tell me about Manali packages", true)}>🏔️ Manali</button>
-                    <button className="discovery-btn" onClick={() => handleQuickSend("Tell me about Bali packages", true)}>⛩️ Bali</button>
-                    <button className="discovery-btn" onClick={() => handleQuickSend("Tell me about Dubai packages", true)}>🏙️ Dubai</button>
-                  </div>
-                </div>
-
-                <div className="discovery-section">
-                  <h3 className="section-heading">🎯 Travel Categories</h3>
-                  <div className="discovery-grid">
-                    <button className="discovery-btn category" onClick={() => handleQuickSend("Budget travel options", true)}>💰 Budget</button>
-                    <button className="discovery-btn category" onClick={() => handleQuickSend("Luxury travel options", true)}>👑 Luxury</button>
-                    <button className="discovery-btn category" onClick={() => handleQuickSend("Adventure travel options", true)}>⛰️ Adventure</button>
-                  </div>
-                </div>
-
-                <div className="discovery-section">
-                  <h3 className="section-heading">⚡ Quick Suggestions</h3>
-                  <div className="discovery-grid">
-                    <button className="discovery-btn suggestion" onClick={() => handleQuickSend("Goa trip packages", true)}>Goa trip packages</button>
-                    <button className="discovery-btn suggestion" onClick={() => handleQuickSend("Planning a family trip", true)}>Planning a family trip</button>
-                    <button className="discovery-btn suggestion" onClick={() => handleQuickSend("Planning a birthday trip", true)}>Planning a birthday trip</button>
-                    <button className="discovery-btn suggestion" onClick={() => handleQuickSend("Corporate travel options", true)}>Corporate travel options</button>
-                  </div>
-                </div>
-              </div>
+              <div className="empty-icon">�</div>
+              <h2 className="empty-title">Start Chatting</h2>
+              <p className="empty-subtitle">Ask questions about your trip anytime</p>
             </div>
           )}
 
@@ -405,46 +619,6 @@ function App() {
 
         {/* Lead Capture/Input Area */}
         <div className="input-area">
-          
-          <div className="travel-dates-widget">
-            <div className="date-group">
-              <span className="date-label">Departure</span>
-              <input
-                type="date"
-                className="date-input"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                title="Select departure date"
-              />
-            </div>
-
-            <div className="date-separator">→</div>
-
-            <div className="date-group">
-              <span className="date-label">Return</span>
-              <input
-                type="date"
-                className="date-input"
-                value={endDate}
-                min={startDate || undefined}
-                onChange={(e) => setEndDate(e.target.value)}
-                title="Select return date"
-              />
-            </div>
-
-            {duration > 0 && (
-              <div className="duration-badge">
-                <span style={{ fontSize: "1.1rem" }}>🗓️</span> {duration} {duration === 1 ? "day" : "days"}
-              </div>
-            )}
-            
-            {startDate && endDate && duration === 0 && (
-              <div className="duration-badge error">
-                ⚠️ Invalid Dates
-              </div>
-            )}
-          </div>
-
           <form className="input-form" onSubmit={(e) => sendMessage(e)}>
             <input
               type="text"
@@ -458,7 +632,6 @@ function App() {
               ➤
             </button>
           </form>
-
         </div>
       </main>
     </div>
